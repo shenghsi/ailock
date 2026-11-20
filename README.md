@@ -104,6 +104,7 @@ Manual override for testing: `ailock block` / `ailock unblock` / `ailock status`
     { "kind": "tcp",  "target": "127.0.0.1:7890",  "timeout_sec": 1 },
     { "kind": "exec", "target": "tailscale status", "timeout_sec": 2 }
   ],
+  "lang": "auto",
   "interval_sec": 2,
   "unblock_after": 2,
   "hosts_file": "",
@@ -112,6 +113,9 @@ Manual override for testing: `ailock block` / `ailock unblock` / `ailock status`
 }
 ```
 
+- `lang` — CLI/log language: `auto` (default) follows the locale, and on
+  OpenWrt (which carries no locale environment) it follows the LuCI web
+  UI language; set `en` or `zh` to force it.
 - `check` — a single probe (simple setups). `checks` — an **any-of list**
   for machines running several clients: the proxy counts as up when *any*
   entry succeeds. Both may be combined.

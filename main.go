@@ -118,6 +118,7 @@ func main() {
 type appConfig struct {
 	Check          check.Config   `json:"check"`  // single probe (simple setups)
 	Checks         []check.Config `json:"checks"` // any-of probe list; devices running several clients
+	Lang           string         `json:"lang"`   // "auto" (default), "en", "zh"
 	IntervalSec    float64        `json:"interval_sec"`
 	UnblockAfter   int            `json:"unblock_after"`
 	HostsFile      string         `json:"hosts_file"`
@@ -132,6 +133,7 @@ func defaultBlocklistPath() string { return filepath.Join(platform.ConfigDir(), 
 func defaultAppConfig() appConfig {
 	return appConfig{
 		Check:        check.Config{Kind: "tcp", Target: "127.0.0.1:10808", TimeoutSec: 1.0},
+		Lang:         "auto",
 		IntervalSec:  2.0,
 		UnblockAfter: 2,
 	}
@@ -152,9 +154,9 @@ func loadConfig(path string) (appConfig, string) {
 			"配置 %s 无法读取（%v）——使用内置默认值"), path, err)
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return defaultAppConfig(), fmt.Sprintf(i18n.T("config %s invalid JSON (%v) — using embedded defaults",
-			"配置 %s 不是有效的 JSON（%v）——使用内置默认值"), path, err)
+		cfg = defaultAppConfig()
 	}
+	i18n.SetForced(cfg.Lang)
 	return cfg, warn
 }
 

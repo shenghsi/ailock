@@ -92,6 +92,7 @@ PowerShell 中运行 `.\ailock.exe install`（SmartScreen 提示时选*更多信
     { "kind": "tcp",  "target": "127.0.0.1:7890",  "timeout_sec": 1 },
     { "kind": "exec", "target": "tailscale status", "timeout_sec": 2 }
   ],
+  "lang": "auto",
   "interval_sec": 2,
   "unblock_after": 2,
   "hosts_file": "",
@@ -100,6 +101,9 @@ PowerShell 中运行 `.\ailock.exe install`（SmartScreen 提示时选*更多信
 }
 ```
 
+- `lang`——命令行/日志语言：`auto`（默认）跟随系统语言；OpenWrt 没有
+  locale 环境变量，会自动跟随 LuCI 界面语言；也可设为 `en` 或 `zh` 强制
+  指定。
 - `check`——单个探测（简单场景）。`checks`——**任一成功即算代理在线**的
   探测列表，适合一台机器跑多个客户端的情况。两者可以同时使用。
 - 探测类型：`tcp`（TCP 连接）、`http`（GET，2xx 即在线）、`exec`（shell
