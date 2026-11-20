@@ -234,6 +234,15 @@ silently disable the kill switch.
 
 ## Testing the installation
 
+On a Linux/systemd host the whole sequence below is automated:
+
+    sudo ./scripts/selftest.sh [proxy-service] [test-domain]
+    # e.g. sudo ./scripts/selftest.sh proxyctl youtube.com
+
+It stops your proxy service, asserts the block appears and general
+connectivity survives, restarts the proxy and asserts recovery; the
+proxy is always restored, even on failure.
+
 1. `ailock status` — probe OK, state not blocked, proxy running.
 2. Stop your proxy (e.g. `sudo systemctl stop <proxy>`) → within ~3s
    `ailock status` shows BLOCKED; `ping chatgpt.com` / `getent hosts

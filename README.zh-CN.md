@@ -207,6 +207,14 @@ API、静态 CDN）、`[ms-copilot]`（含 GitHub Copilot）、`[xai-grok]`、
 
 ## 验证安装
 
+Linux/systemd 主机上，下面整套流程是自动化的：
+
+    sudo ./scripts/selftest.sh [代理服务名] [测试域名]
+    # 例：sudo ./scripts/selftest.sh proxyctl youtube.com
+
+它会停掉你的代理服务，断言屏蔽生效且普通联网不受影响，再启动代理并
+断言恢复；无论成败，代理服务最终都会被恢复。
+
 1. `ailock status` —— 探测正常、未屏蔽、代理在线。
 2. 停掉代理（如 `sudo systemctl stop <代理>`）→ 约 3 秒内 `ailock status`
    显示已屏蔽；`ping chatgpt.com` / `getent hosts chatgpt.com` 解析为
