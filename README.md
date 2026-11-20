@@ -43,11 +43,54 @@ Then, **as root** (sudo / Administrator):
 That copies the binary to `/usr/local/bin` (OpenWrt: `/usr/bin`), writes
 `/etc/ailock/config.json` + `/etc/ailock/blocklist` if missing (Windows:
 `%ProgramData%\ailock\`), and registers + starts the OS service
-(systemd / procd / launchd / Windows service). **Edit the config's
-`check`/`checks` to point at your proxy before or after installing.**
+(systemd / procd / launchd / Windows service).
+
+### Installing a downloaded release binary
+
+Grab the matching file from the [releases page][releases] (`uname -m`:
+`x86_64` → amd64, `aarch64` → arm64) and run its `install` as root/admin —
+it installs itself, so the downloaded file can be deleted afterwards.
+
+Linux:
+
+    curl -LO https://github.com/shenghsi/ailock/releases/latest/download/ailock-linux-amd64
+    chmod +x ailock-linux-amd64
+    sudo ./ailock-linux-amd64 install
+
+OpenWrt: download or `scp` the right arch (`arm`, `mips`, `mipsle`) and
+run `./ailock-linux-<arch> install` — installs to `/usr/bin`, registers a
+procd service and defaults `dnsmasq_conf_dir` to `/tmp/dnsmasq.d` for
+LAN-wide wildcard blocking.
+
+macOS (Apple Silicon; Intel uses `-amd64`):
+
+    curl -LO https://github.com/shenghsi/ailock/releases/latest/download/ailock-darwin-arm64
+    chmod +x ailock-darwin-arm64
+    sudo ./ailock-darwin-arm64 install
+    # browser-downloaded binaries: clear the quarantine flag first:
+    # xattr -d com.apple.quarantine ailock-darwin-arm64
+
+Windows: download `ailock-windows-amd64.exe`, rename to `ailock.exe`, in
+an elevated PowerShell run `.\ailock.exe install` (SmartScreen: *More
+info → Run anyway* — the binary is unsigned).
+
+After installing, **point the probe at your proxy** — edit
+`/etc/ailock/config.json` (`%ProgramData%\ailock\config.json` on
+Windows; see the table below) and restart the service so it is re-read:
+
+    sudo systemctl restart ailock                        # Linux
+    /etc/init.d/ailock restart                           # OpenWrt
+    sudo launchctl kickstart -k system/com.ailock.daemon # macOS
+    sc stop ailock && sc start ailock                     # Windows (elevated)
+
+Until the probe target actually matches your proxy, ailock stays
+**blocked** (fail-closed by design) — `ailock status` shows which side
+you are on.
 
 Uninstall: `ailock uninstall` (config and blocklist are kept).
 Manual override for testing: `ailock block` / `ailock unblock` / `ailock status`.
+
+[releases]: https://github.com/shenghsi/ailock/releases
 
 ## Config (`/etc/ailock/config.json`)
 
