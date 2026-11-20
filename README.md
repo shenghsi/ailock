@@ -144,9 +144,11 @@ accounts, YouTube, Gmail, APIs, static CDNs) `[ms-copilot]`
 DoH endpoints, so DoH-configured browsers fall back to the system
 resolver and hit the sinkhole).
 
-Changes take effect on the next toggle or service restart. If the file is
-missing or invalid, the **embedded copy** is used — a broken blocklist
-can never silently disable the kill switch.
+The running daemon keeps the copy it loaded at startup: changes take
+effect after a service restart (the manual `ailock block` / `ailock
+unblock` commands re-read the file immediately). If the file is missing
+or invalid, the **embedded copy** is used — a broken blocklist can never
+silently disable the kill switch.
 
 ## Honest limitations
 
@@ -162,6 +164,30 @@ can never silently disable the kill switch.
 - Firewall IP-range blocking is deliberately out of scope: provider
   domains are CDN-fronted and IP lists would be both over- and
   under-broad.
+
+## Quirks & troubleshooting
+
+- **Binaries are unsigned.** Windows SmartScreen will warn on first run
+  (*More info → Run anyway*); macOS Gatekeeper quarantines
+  browser-downloaded files — clear it with
+  `xattr -d com.apple.quarantine <file>` (or download with `curl`, which
+  does not set the flag). Linux only needs `chmod +x`.
+- **Where the logs are**: Linux `journalctl -u ailock -f`; OpenWrt
+  `logread -f | grep ailock`; macOS `/var/log/ailock.log`; Windows
+  `%ProgramData%\ailock\ailock.log` (services have no console, so stderr
+  is redirected there).
+- **Config is read once at startup.** After editing
+  `config.json`/`blocklist`, restart the service (commands listed under
+  "Installing a downloaded release binary"). Manual `ailock block` /
+  `unblock` / `status` always re-read both files.
+- **Everything looks blocked and won't lift?** Almost always the probe
+  target: `ailock check` runs your configured probe once and prints the
+  error. Until it passes, the block stays on — that is the fail-closed
+  design, not a bug. `ailock unblock` is the escape hatch.
+- **Blocked at boot for a few seconds** even with a healthy proxy: the
+  daemon applies the block before its first probe (~2s to lift).
+- **Windows: hosts edits need the service.** Run `ailock` commands from
+  an elevated prompt when they touch the hosts file or the service.
 
 ## Testing the installation
 
