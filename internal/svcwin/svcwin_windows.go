@@ -75,7 +75,9 @@ func (h *handler) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<
 }
 
 // Install registers the service pointing at exePath with the given config
-// path argument, sets it to auto-start and starts it.
+// path argument, sets it to auto-start and starts it. Re-running it on an
+// existing service replaces it, so `ailock install` doubles as the
+// updater (stop → recreate → start; the caller replaces the exe first).
 func Install(exePath, configPath string) error {
 	m, err := mgr.Connect()
 	if err != nil {
@@ -84,8 +86,9 @@ func Install(exePath, configPath string) error {
 	defer m.Disconnect()
 
 	if s, err := m.OpenService(serviceName); err == nil {
-		s.Close()
-		return fmt.Errorf("service %q already exists (uninstall first)", serviceName)
+		if err := stopAndDelete(s); err != nil {
+			return err
+		}
 	}
 	s, err := m.CreateService(serviceName, exePath, mgr.Config{
 		StartType:   mgr.StartAutomatic,
@@ -99,17 +102,8 @@ func Install(exePath, configPath string) error {
 	return nil
 }
 
-// Uninstall stops and removes the service.
-func Uninstall() error {
-	m, err := mgr.Connect()
-	if err != nil {
-		return fmt.Errorf("connect service manager (need admin): %w", err)
-	}
-	defer m.Disconnect()
-	s, err := m.OpenService(serviceName)
-	if err != nil {
-		return fmt.Errorf("service %q not found", serviceName)
-	}
+// stopAndDelete stops s (waiting briefly) and marks it for deletion.
+func stopAndDelete(s *mgr.Service) error {
 	defer s.Close()
 	if st, err := s.Query(); err == nil && st.State != svc.Stopped {
 		if _, err := s.Control(1); err != nil { // SERVICE_CONTROL_STOP
@@ -125,4 +119,18 @@ func Uninstall() error {
 		}
 	}
 	return s.Delete()
+}
+
+// Uninstall stops and removes the service.
+func Uninstall() error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("connect service manager (need admin): %w", err)
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(serviceName)
+	if err != nil {
+		return fmt.Errorf("service %q not found", serviceName)
+	}
+	return stopAndDelete(s)
 }

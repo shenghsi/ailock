@@ -80,6 +80,22 @@ PowerShell 中运行 `.\ailock.exe install`（SmartScreen 提示时选*更多信
 在探测目标真正对应你的代理之前，ailock 会一直保持**屏蔽**（设计如此，故障
 关闭）——`ailock status` 可以看到当前处于哪种状态。
 
+### 更新
+
+下载新版 release 二进制，再执行一次它的 `install`——它会原子地替换二进制
+（服务运行中也可以）、**保留你的配置和屏蔽列表**、刷新服务单元并重启：
+
+    curl -LO https://github.com/shenghsi/ailock/releases/latest/download/ailock-linux-amd64
+    chmod +x ailock-linux-amd64
+    sudo ./ailock-linux-amd64 install
+    ailock version      # 确认版本
+
+Windows 上正在运行的 exe 被锁定：先 `ailock uninstall`，替换原路径的
+`ailock.exe`，再 `ailock install`（服务指向你安装时所用的 exe——请放在
+固定路径）。新版本可能更新了默认屏蔽列表：你的列表会被保留；如需采用
+新默认，参照仓库里的 `blocklist` 文件，删除 `/etc/ailock/blocklist` 后
+重新生成。
+
 卸载：`ailock uninstall`（保留配置和屏蔽列表）。
 手动覆盖 / 测试：`ailock block` / `ailock unblock` / `ailock status`。
 

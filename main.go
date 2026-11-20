@@ -482,6 +482,10 @@ func ensureConfigFiles(cfgPath string) error {
 	return nil
 }
 
+// copySelf replaces dest with the running binary. The write is atomic
+// (temp file + rename): overwriting a *running* binary in place fails
+// with ETXTBSY on Linux, while renaming over it is fine — this is what
+// makes `ailock install` work as an updater.
 func copySelf(dest string) error {
 	self, err := os.Executable()
 	if err != nil {
@@ -494,7 +498,24 @@ func copySelf(dest string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dest, data, 0o755)
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".ailock-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op after a successful rename
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o755); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, dest)
 }
 
 func cmdInstall(cfgPath string) error {
@@ -549,6 +570,11 @@ func cmdInstall(cfgPath string) error {
 			return err
 		}
 		if err := runCmd("systemctl", "enable", "--now", "ailock.service"); err != nil {
+			return err
+		}
+		// enable --now starts only inactive units: an update must also
+		// restart the service onto the freshly copied binary.
+		if err := runCmd("systemctl", "restart", "ailock.service"); err != nil {
 			return err
 		}
 		fmt.Println(i18n.T("ailock.service enabled and started (journalctl -u ailock -f)",
