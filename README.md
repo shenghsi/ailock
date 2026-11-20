@@ -92,21 +92,22 @@ you are on.
 
 ### Updating
 
-Grab the new release binary and run its `install` again — it atomically
-replaces the binary (even while the service is running), **keeps your
-config and blocklist**, refreshes the service unit and restarts:
+    ailock update --check   # is there a newer release?
+    sudo ailock update      # download, verify, replace the binary, restart
 
-    curl -LO https://github.com/shenghsi/ailock/releases/latest/download/ailock-linux-amd64
-    chmod +x ailock-linux-amd64
-    sudo ./ailock-linux-amd64 install
-    ailock version      # confirm
+The update command queries the GitHub release for the asset matching
+your OS/arch, verifies it against the release's SHA256SUMS, atomically
+replaces the installed binary (fine while the service runs; on Windows
+the old exe is renamed to `ailock.exe.old` first) and restarts the
+service. Config and blocklist are never touched. If GitHub is not
+reachable directly, set `https_proxy` first — the download honors proxy
+environment variables.
 
-On Windows the running exe is locked: run `ailock uninstall`, replace
-`ailock.exe` at its location, then `ailock install` again (the service
-now points at the exe you install from — keep it in a stable path).
-A release may ship an updated default blocklist: yours is preserved; peek
-at the repo's `blocklist` file and delete `/etc/ailock/blocklist` to
-regenerate the new default.
+The manual fallback still works: download the new release binary and run
+its `install` again (atomic replace, config/blocklist kept, service
+restarted). A release may ship an updated default blocklist: yours is
+preserved; peek at the repo's `blocklist` file and delete
+`/etc/ailock/blocklist` to regenerate the new default.
 
 Uninstall: `ailock uninstall` (config and blocklist are kept).
 Manual override for testing: `ailock block` / `ailock unblock` / `ailock status`.

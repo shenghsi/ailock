@@ -20,3 +20,5 @@ func RunService(onStart func() (func(ctx context.Context) error, error)) error {
 func Install(exePath, configPath string) error { return errNotWindows }
 
 func Uninstall() error { return errNotWindows }
+
+func RestartService() error { return errNotWindows }

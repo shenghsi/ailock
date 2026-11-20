@@ -109,16 +109,42 @@ func stopAndDelete(s *mgr.Service) error {
 		if _, err := s.Control(1); err != nil { // SERVICE_CONTROL_STOP
 			return fmt.Errorf("stop service: %w", err)
 		}
-		deadline := time.Now().Add(10 * time.Second)
-		for time.Now().Before(deadline) {
-			st, err := s.Query()
-			if err != nil || st.State == svc.Stopped {
-				break
-			}
-			time.Sleep(200 * time.Millisecond)
-		}
+		waitStopped(s)
 	}
 	return s.Delete()
+}
+
+// waitStopped blocks until the service reports Stopped (~10s deadline).
+func waitStopped(s *mgr.Service) {
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		st, err := s.Query()
+		if err != nil || st.State == svc.Stopped {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// RestartService stops and starts the ailock service (used by update).
+func RestartService() error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("connect service manager (need admin): %w", err)
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(serviceName)
+	if err != nil {
+		return fmt.Errorf("service %q not found (install first)", serviceName)
+	}
+	defer s.Close()
+	if st, err := s.Query(); err == nil && st.State != svc.Stopped {
+		if _, err := s.Control(1); err != nil { // SERVICE_CONTROL_STOP
+			return fmt.Errorf("stop service: %w", err)
+		}
+		waitStopped(s)
+	}
+	return s.Start()
 }
 
 // Uninstall stops and removes the service.

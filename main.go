@@ -25,6 +25,7 @@ import (
 	"github.com/shenghsi/ailock/internal/daemon"
 	"github.com/shenghsi/ailock/internal/i18n"
 	"github.com/shenghsi/ailock/internal/platform"
+	"github.com/shenghsi/ailock/internal/selfupdate"
 	"github.com/shenghsi/ailock/internal/svcwin"
 )
 
@@ -46,6 +47,8 @@ Commands:
   check      run the health probe once and report
   block      apply the block immediately (manual/testing)
   unblock    remove the block immediately (manual escape hatch)
+  update     download the latest release over this binary and restart the
+             service (--check to only look)
   version    print the version
 
 The default config path is /etc/ailock/config.json (%ProgramData%\ailock on
@@ -65,6 +68,7 @@ const usageZh = `ailock — 代理断开时黑洞（熔断）美国 AI 服务商
   check      执行一次健康探测并报告结果
   block      立即屏蔽（手动/测试用）
   unblock    立即解除屏蔽（手动逃生通道）
+  update     从 GitHub 下载最新版本并替换自身、重启服务（--check 仅检查）
   version    打印版本号
 
 默认配置路径为 /etc/ailock/config.json（Windows 为
@@ -101,6 +105,8 @@ func main() {
 		err = cmdBlock(*cfgPath, true)
 	case "unblock":
 		err = cmdBlock(*cfgPath, false)
+	case "update":
+		err = cmdUpdate(args[1:])
 	case "version":
 		fmt.Println("ailock", version)
 	default:
@@ -364,6 +370,98 @@ func blockedDomainCount(hostsPath string) int {
 		}
 	}
 	return n
+}
+
+// ---------------------------------------------------------------- update
+
+func cmdUpdate(args []string) error {
+	checkOnly := false
+	for _, a := range args {
+		if a == "--check" || a == "-check" || a == "check" {
+			checkOnly = true
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "unknown argument %q for update\n", a)
+		os.Exit(2)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	rel, err := selfupdate.Latest(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Printf(i18n.T("current: %s, latest: %s\n", "当前版本：%s，最新版本：%s\n"), version, rel.Tag)
+	if !selfupdate.Newer(rel.Tag, version) {
+		fmt.Println(i18n.T("already up to date", "已是最新版本"))
+		return nil
+	}
+	if checkOnly {
+		fmt.Println(i18n.T("newer release available — run 'ailock update' as root/admin to apply",
+			"有新版本——以 root/管理员身份运行 ailock update 应用"))
+		return nil
+	}
+
+	asset := selfupdate.AssetName(runtime.GOOS, runtime.GOARCH)
+	url, ok := rel.Assets[asset]
+	if !ok {
+		return errors.New(fmt.Sprintf(i18n.T("release %s has no asset %s — update manually",
+			"release %s 没有适用于本平台的文件 %s——请手动更新"), rel.Tag, asset))
+	}
+	fmt.Println(i18n.T("downloading...", "下载中…"))
+	data, err := selfupdate.Download(ctx, url)
+	if err != nil {
+		return err
+	}
+	fmt.Printf(i18n.T("downloaded %s (%.1f MiB)\n", "已下载 %s（%.1f MiB）\n"), asset, float64(len(data))/(1<<20))
+
+	if sumsURL, ok := rel.Assets["SHA256SUMS"]; ok {
+		sums, serr := selfupdate.Download(ctx, sumsURL)
+		if serr != nil {
+			fmt.Println(i18n.T("warning: SHA256SUMS unreadable, skipping checksum",
+				"警告：无法读取 SHA256SUMS，跳过校验"))
+		} else if verr := selfupdate.VerifyChecksum(sums, asset, data); verr != nil {
+			return errors.New(fmt.Sprintf(i18n.T("refusing to install: %v", "拒绝安装：%v"), verr))
+		} else {
+			fmt.Println(i18n.T("checksum verified", "校验和已通过"))
+		}
+	} else {
+		fmt.Println(i18n.T("note: release ships no SHA256SUMS, skipping checksum",
+			"提示：该 release 未附带 SHA256SUMS，跳过校验"))
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if err := selfupdate.ReplaceExecutable(self, data); err != nil {
+		return err
+	}
+	fmt.Printf(i18n.T("updated %s → %s\n", "已更新 %s → %s\n"), version, selfupdate.NormalizeTag(rel.Tag))
+
+	if err := restartInstalledService(); err != nil {
+		fmt.Println(i18n.T("warning: service not restarted, start it manually: ",
+			"警告：服务未重启，请手动启动："), err)
+	} else {
+		fmt.Println(i18n.T("service restarted onto the new version", "服务已在新版本上重启"))
+	}
+	return nil
+}
+
+func restartInstalledService() error {
+	switch {
+	case runtime.GOOS == "windows":
+		return svcwin.RestartService()
+	case isOpenWrt():
+		return runCmd("/etc/init.d/ailock", "restart")
+	case hasSystemd():
+		return runCmd("systemctl", "restart", "ailock.service")
+	case runtime.GOOS == "darwin":
+		return runCmd("launchctl", "kickstart", "-k", "system/com.ailock.daemon")
+	default:
+		return errors.New(i18n.T("no supported init system found", "未找到支持的 init 系统"))
+	}
 }
 
 // ---------------------------------------------------------------- install

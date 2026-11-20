@@ -82,19 +82,19 @@ PowerShell 中运行 `.\ailock.exe install`（SmartScreen 提示时选*更多信
 
 ### 更新
 
-下载新版 release 二进制，再执行一次它的 `install`——它会原子地替换二进制
-（服务运行中也可以）、**保留你的配置和屏蔽列表**、刷新服务单元并重启：
+    ailock update --check   # 检查是否有新版本
+    sudo ailock update      # 下载、校验、替换二进制并重启服务
 
-    curl -LO https://github.com/shenghsi/ailock/releases/latest/download/ailock-linux-amd64
-    chmod +x ailock-linux-amd64
-    sudo ./ailock-linux-amd64 install
-    ailock version      # 确认版本
+update 命令会从 GitHub release 选择匹配当前系统/架构的文件，按 release
+附带的 SHA256SUMS 校验后，原子地替换已安装的二进制（服务运行中也可；
+Windows 上会先把旧 exe 改名为 `ailock.exe.old`），然后重启服务。配置与
+屏蔽列表不会被改动。如果直连 GitHub 不通，请先设置 `https_proxy`——下载
+遵循代理环境变量。
 
-Windows 上正在运行的 exe 被锁定：先 `ailock uninstall`，替换原路径的
-`ailock.exe`，再 `ailock install`（服务指向你安装时所用的 exe——请放在
-固定路径）。新版本可能更新了默认屏蔽列表：你的列表会被保留；如需采用
-新默认，参照仓库里的 `blocklist` 文件，删除 `/etc/ailock/blocklist` 后
-重新生成。
+手动更新依然可用：下载新版 release 二进制再执行一次它的 `install`（原子
+替换、保留配置/屏蔽列表、重启服务）。新版本可能更新了默认屏蔽列表：你的
+列表会被保留；如需采用新默认，参照仓库里的 `blocklist` 文件，删除
+`/etc/ailock/blocklist` 后重新生成。
 
 卸载：`ailock uninstall`（保留配置和屏蔽列表）。
 手动覆盖 / 测试：`ailock block` / `ailock unblock` / `ailock status`。
