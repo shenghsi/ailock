@@ -23,6 +23,7 @@ import (
 	"github.com/shenghsi/ailock/internal/blocklist"
 	"github.com/shenghsi/ailock/internal/check"
 	"github.com/shenghsi/ailock/internal/daemon"
+	"github.com/shenghsi/ailock/internal/i18n"
 	"github.com/shenghsi/ailock/internal/platform"
 	"github.com/shenghsi/ailock/internal/svcwin"
 )
@@ -32,7 +33,7 @@ var embeddedBlocklist []byte
 
 const version = "0.1.0"
 
-const usage = `ailock — sinkhole US AI providers while the proxy is down
+const usageEn = `ailock — sinkhole US AI providers while the proxy is down
 
 Usage:
   ailock [-c CONFIG] COMMAND
@@ -51,6 +52,27 @@ The default config path is /etc/ailock/config.json (%ProgramData%\ailock on
 Windows). If the config or blocklist file is missing, embedded defaults are
 used, so a broken config can never silently disable the kill switch.`
 
+const usageZh = `ailock — 代理断开时黑洞（熔断）美国 AI 服务商域名
+
+用法：
+  ailock [-c 配置文件] 命令
+
+命令：
+  run        前台运行守护进程（系统服务执行的即是此命令）
+  install    写入默认配置/屏蔽列表并注册系统服务
+  uninstall  停止并移除系统服务（保留配置与屏蔽列表）
+  status     查看屏蔽状态，并执行一次健康探测
+  check      执行一次健康探测并报告结果
+  block      立即屏蔽（手动/测试用）
+  unblock    立即解除屏蔽（手动逃生通道）
+  version    打印版本号
+
+默认配置路径为 /etc/ailock/config.json（Windows 为
+%ProgramData%\ailock\config.json）。配置或屏蔽列表缺失时自动使用内置
+默认值——损坏的配置绝不会让熔断保护悄悄失效。`
+
+func usageText() string { return i18n.T(usageEn, usageZh) }
+
 func main() {
 	fs := flag.NewFlagSet("ailock", flag.ContinueOnError)
 	cfgPath := fs.String("c", defaultConfigPath(), "config file path")
@@ -59,7 +81,7 @@ func main() {
 	}
 	args := fs.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, usage)
+		fmt.Fprintln(os.Stderr, usageText())
 		os.Exit(2)
 	}
 
@@ -82,7 +104,7 @@ func main() {
 	case "version":
 		fmt.Println("ailock", version)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", args[0], usage)
+		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", args[0], usageText())
 		os.Exit(2)
 	}
 	if err != nil {
@@ -123,12 +145,15 @@ func loadConfig(path string) (appConfig, string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return cfg, fmt.Sprintf("config %s missing — using embedded defaults", path)
+			return cfg, fmt.Sprintf(i18n.T("config %s missing — using embedded defaults",
+				"配置 %s 不存在——使用内置默认值"), path)
 		}
-		return cfg, fmt.Sprintf("config %s unreadable (%v) — using embedded defaults", path, err)
+		return cfg, fmt.Sprintf(i18n.T("config %s unreadable (%v) — using embedded defaults",
+			"配置 %s 无法读取（%v）——使用内置默认值"), path, err)
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return defaultAppConfig(), fmt.Sprintf("config %s invalid JSON (%v) — using embedded defaults", path, err)
+		return defaultAppConfig(), fmt.Sprintf(i18n.T("config %s invalid JSON (%v) — using embedded defaults",
+			"配置 %s 不是有效的 JSON（%v）——使用内置默认值"), path, err)
 	}
 	return cfg, warn
 }
@@ -146,9 +171,11 @@ func loadBlocklist(cfg appConfig) (*blocklist.List, string) {
 		if perr == nil {
 			return l, ""
 		}
-		return mustEmbedded(), fmt.Sprintf("blocklist %s invalid (%v) — using embedded default", path, perr)
+		return mustEmbedded(), fmt.Sprintf(i18n.T("blocklist %s invalid (%v) — using embedded default",
+			"屏蔽列表 %s 无效（%v）——使用内置默认列表"), path, perr)
 	}
-	return mustEmbedded(), fmt.Sprintf("blocklist %s missing/unreadable (%v) — using embedded default", path, err)
+	return mustEmbedded(), fmt.Sprintf(i18n.T("blocklist %s missing/unreadable (%v) — using embedded default",
+		"屏蔽列表 %s 不存在或无法读取（%v）——使用内置默认列表"), path, err)
 }
 
 func mustEmbedded() *blocklist.List {
@@ -167,22 +194,26 @@ func buildProbe(cfg appConfig) (probe check.Probe, warn string) {
 	single := cfg.Check.WithDefaults()
 	if cfg.Check.Target != "" {
 		if err := single.Validate(); err != nil {
-			return check.Invalid{Err: fmt.Errorf("check invalid: %w", err)},
-				fmt.Sprintf("check invalid (%v) — staying blocked (fail closed)", err)
+			return check.Invalid{Err: fmt.Errorf("%s: %w", i18n.T("check invalid", "检测配置无效"), err)},
+				fmt.Sprintf(i18n.T("check invalid (%v) — staying blocked (fail closed)",
+					"check 配置无效（%v）——保持屏蔽（故障关闭）"), err)
 		}
 		probes = append(probes, single)
 	}
 	for i := range cfg.Checks {
 		c := cfg.Checks[i].WithDefaults()
 		if err := c.Validate(); err != nil {
-			return check.Invalid{Err: fmt.Errorf("checks[%d] invalid: %w", i, err)},
-				fmt.Sprintf("checks[%d] invalid (%v) — staying blocked (fail closed)", i, err)
+			return check.Invalid{Err: fmt.Errorf("%s: %w",
+					fmt.Sprintf(i18n.T("checks[%d] invalid", "checks[%d] 配置无效"), i), err)},
+				fmt.Sprintf(i18n.T("checks[%d] invalid (%v) — staying blocked (fail closed)",
+					"checks[%d] 配置无效（%v）——保持屏蔽（故障关闭）"), i, err)
 		}
 		probes = append(probes, c)
 	}
 	if len(probes) == 0 {
-		return check.Invalid{Err: errors.New("no check configured")},
-			"no check/checks configured — staying blocked (fail closed)"
+		return check.Invalid{Err: errors.New(i18n.T("no check configured", "未配置任何健康检测"))},
+			i18n.T("no check/checks configured — staying blocked (fail closed)",
+				"未配置 check/checks——保持屏蔽（故障关闭）")
 	}
 	if len(probes) == 1 {
 		return probes[0], ""
@@ -238,13 +269,14 @@ func cmdCheck(cfgPath string) error {
 	start := time.Now()
 	err := probe.Run(context.Background())
 	if err != nil {
-		fmt.Printf("proxy check FAILED: %v\n", err)
+		fmt.Printf(i18n.T("proxy check FAILED: %v\n", "代理检测失败：%v\n"), err)
 		if warn != "" || pwarn != "" {
-			fmt.Println("note:", firstNonEmpty(warn, pwarn))
+			fmt.Println(i18n.T("note: ", "提示："), firstNonEmpty(warn, pwarn))
 		}
 		return err
 	}
-	fmt.Printf("proxy check OK (%.0fms)\n", float64(time.Since(start).Microseconds())/1000)
+	fmt.Printf(i18n.T("proxy check OK (%.0fms)\n", "代理检测正常（%.0fms）\n"),
+		float64(time.Since(start).Microseconds())/1000)
 	return nil
 }
 
@@ -261,27 +293,29 @@ func cmdStatus(cfgPath string) error {
 	probe, pwarn := buildProbe(cfg)
 	d := daemonConfig(probe, cfg, list.Domains(), log.New(os.Stderr, "", 0))
 
-	fmt.Printf("config:       %s\n", cfgPath)
-	fmt.Printf("hosts file:   %s\n", d.HostsPath)
+	fmt.Printf(i18n.T("config:       %s\n", "配置文件：    %s\n"), cfgPath)
+	fmt.Printf(i18n.T("hosts file:   %s\n", "hosts 文件：  %s\n"), d.HostsPath)
 	if d.BlockedNow() {
-		fmt.Printf("state:        BLOCKED (%d domains sinkholed)\n",
+		fmt.Printf(i18n.T("state:        BLOCKED (%d domains sinkholed)\n",
+			"状态：        已屏蔽（黑洞了 %d 个域名）\n"),
 			blockedDomainCount(d.HostsPath))
 	} else {
-		fmt.Println("state:        not blocked")
+		fmt.Println(i18n.T("state:        not blocked", "状态：        未屏蔽"))
 	}
 	if d.DnsmasqConfDir != "" {
-		fmt.Printf("dnsmasq:      %s (%v)\n", d.DnsmasqConfDir, platform.DnsmasqBlocked(d.DnsmasqConfDir))
+		fmt.Printf(i18n.T("dnsmasq:      %s (%v)\n", "dnsmasq：     %s（%v）\n"),
+			d.DnsmasqConfDir, platform.DnsmasqBlocked(d.DnsmasqConfDir))
 	}
 	start := time.Now()
 	err := d.Probe.Run(context.Background())
-	verdict := fmt.Sprintf("OK (%dms)", time.Since(start).Milliseconds())
+	verdict := fmt.Sprintf(i18n.T("OK (%dms)", "正常（%dms）"), time.Since(start).Milliseconds())
 	if err != nil {
-		verdict = fmt.Sprintf("FAILED: %v", err)
+		verdict = fmt.Sprintf(i18n.T("FAILED: %v", "失败：%v"), err)
 	}
-	fmt.Printf("proxy probe:  %s\n", verdict)
+	fmt.Printf(i18n.T("proxy probe:  %s\n", "代理探测：    %s\n"), verdict)
 	for _, w := range []string{warn, lwarn, pwarn} {
 		if w != "" {
-			fmt.Println("warning:", w)
+			fmt.Println(i18n.T("warning: ", "警告："), w)
 		}
 	}
 	return nil
@@ -300,11 +334,17 @@ func cmdBlock(cfgPath string, wantBlocked bool) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("done: %d domains %s in %s\n", len(d.Domains),
-		map[bool]string{true: "blocked", false: "unblocked"}[wantBlocked], d.HostsPath)
+	action := map[bool]string{
+		true:  i18n.T("blocked (entries written)", "写入屏蔽条目"),
+		false: i18n.T("unblocked (entries removed)", "移除屏蔽条目"),
+	}[wantBlocked]
+	fmt.Printf(i18n.T(
+		"done: %[2]s %[1]d domains in %[3]s\n",
+		"完成：已在 %[3]s 中%[2]s %[1]d 个域名\n"),
+		len(d.Domains), action, d.HostsPath)
 	for _, w := range []string{warn, lwarn} {
 		if w != "" {
-			fmt.Println("warning:", w)
+			fmt.Println(i18n.T("warning: ", "警告："), w)
 		}
 	}
 	return nil
@@ -427,14 +467,15 @@ func ensureConfigFiles(cfgPath string) error {
 		if err := os.WriteFile(cfgPath, append(data, '\n'), 0o644); err != nil {
 			return err
 		}
-		fmt.Printf("wrote default config %s — edit check.target to point at your proxy\n", cfgPath)
+		fmt.Printf(i18n.T("wrote default config %s — edit check.target to point at your proxy\n",
+			"已写入默认配置 %s——请把 check.target 改成你的代理地址\n"), cfgPath)
 	}
 	blPath := defaultBlocklistPath()
 	if _, err := os.Stat(blPath); os.IsNotExist(err) {
 		if err := os.WriteFile(blPath, embeddedBlocklist, 0o644); err != nil {
 			return err
 		}
-		fmt.Printf("wrote default blocklist %s\n", blPath)
+		fmt.Printf(i18n.T("wrote default blocklist %s\n", "已写入默认屏蔽列表 %s\n"), blPath)
 	}
 	return nil
 }
@@ -466,7 +507,7 @@ func cmdInstall(cfgPath string) error {
 		if err := svcwin.Install(exe, cfgPath); err != nil {
 			return err
 		}
-		fmt.Println("ailock service installed and started")
+		fmt.Println(i18n.T("ailock service installed and started", "ailock 服务已安装并启动"))
 		return nil
 	}
 
@@ -480,9 +521,10 @@ func cmdInstall(cfgPath string) error {
 	}
 	bin := filepath.Join(binDir, "ailock")
 	if err := copySelf(bin); err != nil {
-		return fmt.Errorf("copy binary to %s (need root?): %w", bin, err)
+		return fmt.Errorf("%s: %w", fmt.Sprintf(i18n.T("copy binary to %s (need root?)",
+			"复制二进制到 %s 失败（需要 root 权限？）"), bin), err)
 	}
-	fmt.Printf("binary: %s\n", bin)
+	fmt.Printf(i18n.T("binary: %s\n", "二进制： %s\n"), bin)
 
 	switch {
 	case isOpenWrt():
@@ -495,7 +537,8 @@ func cmdInstall(cfgPath string) error {
 		if err := runCmd("/etc/init.d/ailock", "restart"); err != nil {
 			return err
 		}
-		fmt.Println("ailock procd service enabled and started (logs: logread)")
+		fmt.Println(i18n.T("ailock procd service enabled and started (logs: logread)",
+			"ailock procd 服务已启用并启动（日志：logread）"))
 	case hasSystemd():
 		if err := writeTemplate(systemdUnitTmpl, "/etc/systemd/system/ailock.service", 0o644, bin, cfgPath); err != nil {
 			return err
@@ -506,7 +549,8 @@ func cmdInstall(cfgPath string) error {
 		if err := runCmd("systemctl", "enable", "--now", "ailock.service"); err != nil {
 			return err
 		}
-		fmt.Println("ailock.service enabled and started (journalctl -u ailock -f)")
+		fmt.Println(i18n.T("ailock.service enabled and started (journalctl -u ailock -f)",
+			"ailock.service 已启用并启动（journalctl -u ailock -f 查看日志）"))
 	case runtime.GOOS == "darwin":
 		if err := writeTemplate(launchdTmpl, "/Library/LaunchDaemons/com.ailock.daemon.plist", 0o644, bin, cfgPath); err != nil {
 			return err
@@ -515,11 +559,13 @@ func cmdInstall(cfgPath string) error {
 		if err := runCmd("launchctl", "load", "-w", "/Library/LaunchDaemons/com.ailock.daemon.plist"); err != nil {
 			return err
 		}
-		fmt.Println("ailock LaunchDaemon loaded (log: /var/log/ailock.log)")
+		fmt.Println(i18n.T("ailock LaunchDaemon loaded (log: /var/log/ailock.log)",
+			"ailock LaunchDaemon 已加载（日志：/var/log/ailock.log）"))
 	default:
-		return fmt.Errorf("no supported init system found (systemd, procd/OpenWrt, launchd)")
+		return errors.New(i18n.T("no supported init system found (systemd, procd/OpenWrt, launchd)",
+			"未找到支持的 init 系统（systemd、procd/OpenWrt、launchd）"))
 	}
-	fmt.Println("check it: ailock status")
+	fmt.Println(i18n.T("check it: ailock status", "验证：ailock status"))
 	return nil
 }
 
@@ -547,6 +593,6 @@ func cmdUninstall() error {
 		_ = runCmd("launchctl", "unload", "-w", "/Library/LaunchDaemons/com.ailock.daemon.plist")
 		return os.Remove("/Library/LaunchDaemons/com.ailock.daemon.plist")
 	default:
-		return fmt.Errorf("no supported init system found")
+		return errors.New(i18n.T("no supported init system found", "未找到支持的 init 系统"))
 	}
 }

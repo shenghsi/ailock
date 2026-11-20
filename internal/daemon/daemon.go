@@ -11,6 +11,7 @@ import (
 
 	"github.com/shenghsi/ailock/internal/check"
 	"github.com/shenghsi/ailock/internal/hostsedit"
+	"github.com/shenghsi/ailock/internal/i18n"
 	"github.com/shenghsi/ailock/internal/platform"
 )
 
@@ -61,11 +62,11 @@ func (c *Config) normalize() error {
 // flushes DNS caches.
 func (c Config) Block() error {
 	if err := hostsedit.SetBlocked(c.HostsPath, c.Domains); err != nil {
-		return fmt.Errorf("write hosts block: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("write hosts block", "写入 hosts 屏蔽区"), err)
 	}
 	if c.DnsmasqConfDir != "" {
 		if err := platform.SetDnsmasqBlocked(c.DnsmasqConfDir, c.Domains); err != nil {
-			c.logf("WARNING: dnsmasq block not applied: %v", err)
+			c.logf(i18n.T("WARNING: dnsmasq block not applied: %v", "警告：dnsmasq 屏蔽未生效：%v"), err)
 		}
 	}
 	platform.FlushDNS() // advisory
@@ -75,11 +76,11 @@ func (c Config) Block() error {
 // Unblock removes the sinkhole everywhere it was applied.
 func (c Config) Unblock() error {
 	if err := hostsedit.Remove(c.HostsPath); err != nil {
-		return fmt.Errorf("remove hosts block: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("remove hosts block", "移除 hosts 屏蔽区"), err)
 	}
 	if c.DnsmasqConfDir != "" {
 		if err := platform.RemoveDnsmasqBlocked(c.DnsmasqConfDir); err != nil {
-			c.logf("WARNING: dnsmasq block not removed: %v", err)
+			c.logf(i18n.T("WARNING: dnsmasq block not removed: %v", "警告：dnsmasq 屏蔽未移除：%v"), err)
 		}
 	}
 	platform.FlushDNS() // advisory
@@ -102,14 +103,16 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := cfg.normalize(); err != nil {
 		return err
 	}
-	cfg.logf("ailock starting: hosts=%s domains=%d interval=%s unblock_after=%d dnsmasq=%q",
+	cfg.logf(i18n.T("ailock starting: hosts=%s domains=%d interval=%s unblock_after=%d dnsmasq=%q",
+		"ailock 启动：hosts=%s 域名数=%d 间隔=%s 解除屏蔽需连续成功=%d dnsmasq=%q"),
 		cfg.HostsPath, len(cfg.Domains), cfg.Interval, cfg.UnblockAfter, cfg.DnsmasqConfDir)
 
 	// Fail closed: assume the proxy is down until proven healthy.
 	if err := cfg.Block(); err != nil {
-		return fmt.Errorf("initial fail-closed block: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("initial fail-closed block", "启动时故障关闭屏蔽"), err)
 	}
-	cfg.logf("blocked (fail-closed start; unblocks after %d healthy probes)", cfg.UnblockAfter)
+	cfg.logf(i18n.T("blocked (fail-closed start; unblocks after %d healthy probes)",
+		"已屏蔽（故障关闭启动；连续 %d 次探测成功后自动解除）"), cfg.UnblockAfter)
 
 	streak := 0
 	for {
@@ -119,18 +122,18 @@ func Run(ctx context.Context, cfg Config) error {
 			streak++
 			if streak >= cfg.UnblockAfter && cfg.BlockedNow() {
 				if err := cfg.Unblock(); err != nil {
-					cfg.logf("ERROR: unblock failed: %v", err)
+					cfg.logf(i18n.T("ERROR: unblock failed: %v", "错误：解除屏蔽失败：%v"), err)
 				} else {
-					cfg.logf("proxy healthy %d/%d — unblocked", streak, cfg.UnblockAfter)
+					cfg.logf(i18n.T("proxy healthy %d/%d — unblocked", "代理恢复正常 %d/%d——已解除屏蔽"), streak, cfg.UnblockAfter)
 				}
 			}
 		default:
 			streak = 0
 			if !cfg.BlockedNow() {
 				if err := cfg.Block(); err != nil {
-					cfg.logf("ERROR: block failed: %v", err)
+					cfg.logf(i18n.T("ERROR: block failed: %v", "错误：屏蔽失败：%v"), err)
 				} else {
-					cfg.logf("proxy down (%v) — blocked", probeErr)
+					cfg.logf(i18n.T("proxy down (%v) — blocked", "代理不可用（%v）——已屏蔽"), probeErr)
 				}
 			}
 		}
@@ -140,7 +143,7 @@ func Run(ctx context.Context, cfg Config) error {
 			// Leave the current on-disk state in place: if we are blocked,
 			// staying blocked is the safe direction ("ailock unblock" is the
 			// manual escape hatch).
-			cfg.logf("shutting down (state left as-is, blocked=%v)", cfg.BlockedNow())
+			cfg.logf(i18n.T("shutting down (state left as-is, blocked=%v)", "正在退出（磁盘状态保持不变，已屏蔽=%v）"), cfg.BlockedNow())
 			return nil
 		case <-time.After(cfg.Interval):
 		}

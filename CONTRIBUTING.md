@@ -37,9 +37,18 @@ faster.
 - **General connectivity must never depend on ailock.** Blocking applies
   to the blocklisted domains only; everything else keeps working with the
   daemon stopped, running, or crashed.
+- **User-facing strings are bilingual.** Wrap every new message in
+  `i18n.T("english", "中文")` (`internal/i18n`); zh users get the Chinese
+  text automatically based on locale. Keep format verbs consistent across
+  both languages (use `%[n]s` positional verbs if word order differs).
 - Match the existing style: standard library first, small dependencies
   only (`golang.org/x/sys` is the sole one today), comment density like
   the surrounding code.
+
+Issues and pull requests in Chinese are welcome — a large share of
+ailock's users are Chinese speakers. Docs live in both
+[README.md](README.md) and [README.zh-CN.md](README.zh-CN.md); please
+update both when changing documented behavior.
 
 ## Adding domains to the blocklist
 

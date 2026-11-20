@@ -1,9 +1,12 @@
 # ailock
 
+English | [简体中文](README.zh-CN.md)
+
 A tiny always-on daemon that **sinkholes US AI provider domains whenever
 your proxy/VPN is not running**, and lifts the block the moment it is.
 Runs on Linux, Windows, macOS and OpenWrt (one Go binary per platform, no
-runtimes, CGO-free).
+runtimes, CGO-free). CLI output switches to 简体中文 automatically on
+Chinese locales.
 
 The problem it solves: with a proxy stopped (or crash-looping), clients
 fall back to direct connections and expose your real IP to OpenAI,
