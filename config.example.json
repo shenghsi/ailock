@@ -1,0 +1,12 @@
+{
+  "checks": [
+    { "kind": "tcp", "target": "127.0.0.1:10808", "timeout_sec": 1.0 },
+    { "kind": "tcp", "target": "127.0.0.1:7890", "timeout_sec": 1.0 },
+    { "kind": "exec", "target": "ip link show tailscale0", "timeout_sec": 2.0 }
+  ],
+  "interval_sec": 2.0,
+  "unblock_after": 2,
+  "hosts_file": "",
+  "blocklist_file": "",
+  "dnsmasq_conf_dir": ""
+}

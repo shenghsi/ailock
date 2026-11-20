@@ -1,0 +1,165 @@
+# ailock
+
+A tiny always-on daemon that **sinkholes US AI provider domains whenever
+your proxy/VPN is not running**, and lifts the block the moment it is.
+Runs on Linux, Windows, macOS and OpenWrt (one Go binary per platform, no
+runtimes, CGO-free).
+
+The problem it solves: with a proxy stopped (or crash-looping), clients
+fall back to direct connections and expose your real IP to OpenAI,
+Anthropic, Google, Microsoft, xAI and friends — risking account flags and
+region blocks. ailock makes those domains *fail* instead of *leak*.
+Everything else on the machine keeps working: only the listed domains are
+affected, and only while the proxy is down.
+
+## How it works
+
+- A health probe (your proxy client's local port, an HTTP endpoint, or a
+  shell command) runs every 2 seconds.
+- First failure → write `0.0.0.0` / `::` entries for every blocklist
+  domain into a **marked region of the hosts file**, flush DNS caches.
+- 2 consecutive successes → remove the region, flush again.
+- **Fail closed**: at startup the block is applied *before* the first
+  probe (a healthy proxy is unblocked ~2s later); a stopped daemon leaves
+  the current state in place (`ailock unblock` is the manual escape
+  hatch); a broken config keeps the block on.
+- On OpenWrt (or anywhere dnsmasq runs), an optional `dnsmasq_conf_dir`
+  additionally maintains `address=/domain/` wildcard rules, giving the
+  whole LAN true subdomain-wildcard coverage.
+
+While the proxy is up, normal DNS/routing applies; the hosts region is
+simply absent.
+
+## Install
+
+Build everything (`build.sh`) or grab a binary from the releases:
+
+    bash build.sh          # → dist/ailock-{linux,windows,darwin}-{amd64,arm64,...}
+
+Then, **as root** (sudo / Administrator):
+
+    ./ailock install
+
+That copies the binary to `/usr/local/bin` (OpenWrt: `/usr/bin`), writes
+`/etc/ailock/config.json` + `/etc/ailock/blocklist` if missing (Windows:
+`%ProgramData%\ailock\`), and registers + starts the OS service
+(systemd / procd / launchd / Windows service). **Edit the config's
+`check`/`checks` to point at your proxy before or after installing.**
+
+Uninstall: `ailock uninstall` (config and blocklist are kept).
+Manual override for testing: `ailock block` / `ailock unblock` / `ailock status`.
+
+## Config (`/etc/ailock/config.json`)
+
+```json
+{
+  "checks": [
+    { "kind": "tcp",  "target": "127.0.0.1:10808", "timeout_sec": 1 },
+    { "kind": "tcp",  "target": "127.0.0.1:7890",  "timeout_sec": 1 },
+    { "kind": "exec", "target": "tailscale status", "timeout_sec": 2 }
+  ],
+  "interval_sec": 2,
+  "unblock_after": 2,
+  "hosts_file": "",
+  "blocklist_file": "",
+  "dnsmasq_conf_dir": ""
+}
+```
+
+- `check` — a single probe (simple setups). `checks` — an **any-of list**
+  for machines running several clients: the proxy counts as up when *any*
+  entry succeeds. Both may be combined.
+- Probe kinds: `tcp` (connect), `http` (GET, 2xx = up), `exec` (shell
+  command, exit 0 = up; `sh -c` on Unix, `cmd /C` on Windows).
+- `dnsmasq_conf_dir`: e.g. `/tmp/dnsmasq.d` on OpenWrt.
+
+### What to probe per client
+
+| Client | check |
+| --- | --- |
+| sing-box / v2rayN (default mixed port) | `tcp 127.0.0.1:10808` |
+| your own server on the LAN | `tcp 192.168.1.2:10808` |
+| Clash / Mihomo / Clash Verge | `tcp 127.0.0.1:7890` (Verge often `7897`) |
+| sing-box stock example config | `tcp 127.0.0.1:2080` |
+| Xray / V2Ray core | `tcp 127.0.0.1:1080` or `10808` |
+| Shadowsocks clients | `tcp 127.0.0.1:1080` |
+| clash-compatible API liveness | `http http://127.0.0.1:9090/version` |
+| Tailscale up | `exec tailscale status` (or `ip link show tailscale0`) |
+| WireGuard up | `exec wg show interfaces` (non-empty output = up) |
+
+Prefer the **proxy client's local port**: an interface being up (e.g.
+`tailscale0`) does not mean traffic to AI providers is actually proxied —
+use interface checks only as any-of companions when the proxy binds to
+that tunnel.
+
+## Blocklist (`/etc/ailock/blocklist`)
+
+Plain text, one bare domain per line, `[section]` headers and `#` comments
+allowed. Sections currently: `[openai]` `[anthropic]` `[google]` (wide:
+accounts, YouTube, Gmail, APIs, static CDNs) `[ms-copilot]`
+(+$ GitHub Copilot) `[xai-grok]` `[cursor]` `[doh-bypass]` (well-known
+DoH endpoints, so DoH-configured browsers fall back to the system
+resolver and hit the sinkhole).
+
+Changes take effect on the next toggle or service restart. If the file is
+missing or invalid, the **embedded copy** is used — a broken blocklist
+can never silently disable the kill switch.
+
+## Honest limitations
+
+- **Leak window**: up to one `interval_sec` after the proxy dies, new
+  resolutions still succeed directly; already-established connections
+  persist. Defaults make this ~2s.
+- **hosts has no wildcards**: dynamic-subdomain CDNs (googlevideo,
+  googleusercontent) cannot be fully enumerated — the entry domains are
+  blocked so clients fail early. dnsmasq mode (OpenWrt) has no such gap.
+- **Apps with hardcoded DoH** bypass hosts files unless their resolver
+  endpoint is sinkholed (`doh-bypass` section covers the common ones).
+- **Existing connections** are not cut — blocking affects new lookups.
+- Firewall IP-range blocking is deliberately out of scope: provider
+  domains are CDN-fronted and IP lists would be both over- and
+  under-broad.
+
+## Testing the installation
+
+1. `ailock status` — probe OK, state not blocked, proxy running.
+2. Stop your proxy (e.g. `sudo systemctl stop <proxy>`) → within ~3s
+   `ailock status` shows BLOCKED; `ping chatgpt.com` / `getent hosts
+   chatgpt.com` resolve to `0.0.0.0`. **Other sites still work** (curl
+   something domestic) — general connectivity must survive.
+3. Start the proxy → within ~4-6s the block lifts and AI sites resolve
+   normally again.
+
+## Development
+
+    go build ./...     # build
+    go test ./...      # unit tests (also run with -race)
+    go vet ./...
+    gofmt -l .         # must print nothing
+    bash build.sh      # cross-compile all platforms → dist/
+
+Layout:
+
+    main.go                  CLI (run/install/uninstall/status/check/block/unblock)
+    internal/daemon          fail-closed toggle state machine
+    internal/check           tcp/http/exec probes, any-of combinator
+    internal/hostsedit       marked-region hosts rewriting (atomic, CRLF-safe)
+    internal/blocklist       blocklist parser
+    internal/platform        per-OS paths, DNS flush, dnsmasq emitter
+    internal/svcwin          Windows service host
+    blocklist                default blocklist data (embedded in the binary)
+    build.sh                 cross-compile matrix → dist/
+
+Platform notes: per-OS code lives behind build tags (`internal/platform`,
+`internal/svcwin`); run `GOOS=windows go vet ./...` (and `GOOS=darwin`)
+before touching those, since a plain Linux build does not compile the
+tagged files. CI runs the test suite on Linux, Windows and macOS.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — including the rules for adding
+domains to the blocklist, which is the most common contribution.
+
+## License
+
+[MIT](LICENSE)

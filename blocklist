@@ -1,0 +1,122 @@
+# ailock blocklist — domains sinkholed while the proxy is down.
+#
+# One bare domain per line (no scheme, no wildcard: hosts files support
+# neither, so subdomains must be listed explicitly). [section] headers are
+# organizational only. '#' comments and blank lines are ignored.
+# Changes take effect on the next toggle or service restart.
+#
+# On OpenWrt (dnsmasq_conf_dir configured) every entry also becomes a
+# wildcard address=/domain/ rule, covering all subdomains for the LAN.
+
+[openai]
+openai.com
+api.openai.com
+auth.openai.com
+platform.openai.com
+chatgpt.com
+auth.chatgpt.com
+ab.chatgpt.com
+oaistatic.com
+cdn.oaistatic.com
+oaiusercontent.com
+files.oaiusercontent.com
+sora.com
+
+[anthropic]
+anthropic.com
+api.anthropic.com
+console.anthropic.com
+claude.ai
+statsig.anthropic.com
+
+[google]
+# Core account & app domains
+google.com
+www.google.com
+accounts.google.com
+mail.google.com
+drive.google.com
+docs.google.com
+maps.google.com
+play.google.com
+news.google.com
+scholar.google.com
+google.com.hk
+# AI properties
+gemini.google.com
+aistudio.google.com
+notebooklm.google.com
+labs.google.com
+bard.google.com
+google.ai
+ai.google.dev
+deepmind.com
+deepmind.google
+withgoogle.com
+# APIs & static CDNs
+googleapis.com
+www.googleapis.com
+oauth2.googleapis.com
+storage.googleapis.com
+generativelanguage.googleapis.com
+content.googleapis.com
+gstatic.com
+www.gstatic.com
+fonts.gstatic.com
+ssl.gstatic.com
+googleusercontent.com
+lh3.googleusercontent.com
+googlehosted.com
+# YouTube
+youtube.com
+www.youtube.com
+m.youtube.com
+music.youtube.com
+youtu.be
+i.ytimg.com
+googlevideo.com
+ggpht.com
+yt3.ggpht.com
+
+[ms-copilot]
+copilot.microsoft.com
+sydney.bing.com
+githubcopilot.com
+api.githubcopilot.com
+api.individual.githubcopilot.com
+copilot-proxy.githubusercontent.com
+
+[xai-grok]
+x.ai
+api.x.ai
+grok.com
+assets.grok.com
+
+[cursor]
+cursor.com
+www.cursor.com
+cursor.sh
+api.cursor.sh
+api2.cursor.sh
+api3.cursor.sh
+api4.cursor.sh
+api5.cursor.sh
+api6.cursor.sh
+repo42.cursor.sh
+inlining.cursor.sh
+
+[doh-bypass]
+# Well-known DoH endpoints, so DoH-configured browsers fall back to the
+# system resolver (and hit the sinkhole above) instead of tunneling past
+# the hosts file. If you rely on a regional plain-DNS-friendly DoH server
+# for direct connectivity, keep it OUT of this section.
+dns.google
+dns.google.com
+cloudflare-dns.com
+security.cloudflare-dns.com
+mozilla.cloudflare-dns.com
+one.one.one.one
+dns.quad9.net
+dns11.quad9.net
+doh.cleanbrowsing.org
+doh.opendns.com
