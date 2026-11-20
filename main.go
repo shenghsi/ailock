@@ -53,7 +53,14 @@ Commands:
 
 The default config path is /etc/ailock/config.json (%ProgramData%\ailock on
 Windows). If the config or blocklist file is missing, embedded defaults are
-used, so a broken config can never silently disable the kill switch.`
+used, so a broken config can never silently disable the kill switch.
+
+Examples:
+  sudo ./ailock-linux-amd64 install   # one-time: install from a downloaded release
+  ailock status                        # block state + one probe result
+  ailock check                         # run the configured probe once
+  ailock update --check                # is a newer release available?
+  sudo ailock update                   # self-update + restart the service`
 
 const usageZh = `ailock — 代理断开时黑洞（熔断）美国 AI 服务商域名
 
@@ -73,15 +80,27 @@ const usageZh = `ailock — 代理断开时黑洞（熔断）美国 AI 服务商
 
 默认配置路径为 /etc/ailock/config.json（Windows 为
 %ProgramData%\ailock\config.json）。配置或屏蔽列表缺失时自动使用内置
-默认值——损坏的配置绝不会让熔断保护悄悄失效。`
+默认值——损坏的配置绝不会让熔断保护悄悄失效。
+
+示例：
+  sudo ./ailock-linux-amd64 install   # 一次性：从下载的 release 安装
+  ailock status                        # 屏蔽状态 + 一次探测结果
+  ailock check                         # 执行一次所配置的探测
+  ailock update --check                # 检查是否有新版本
+  sudo ailock update                   # 自更新并重启服务`
 
 func usageText() string { return i18n.T(usageEn, usageZh) }
 
 func main() {
 	fs := flag.NewFlagSet("ailock", flag.ContinueOnError)
+	fs.Usage = func() { fmt.Fprintln(os.Stderr, usageText()) }
 	cfgPath := fs.String("c", defaultConfigPath(), "config file path")
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		os.Exit(2)
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Println(usageText()) // explicit --help: stdout, exit 0
+			return
+		}
+		os.Exit(2) // the flag package already printed the usage
 	}
 	args := fs.Args()
 	if len(args) == 0 {
@@ -109,6 +128,8 @@ func main() {
 		err = cmdUpdate(args[1:])
 	case "version":
 		fmt.Println("ailock", version)
+	case "help", "-h", "--help":
+		fmt.Println(usageText())
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s\n", args[0], usageText())
 		os.Exit(2)
