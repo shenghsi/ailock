@@ -31,7 +31,7 @@ import (
 //go:embed blocklist
 var embeddedBlocklist []byte
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 const usageEn = `ailock — sinkhole US AI providers while the proxy is down
 
