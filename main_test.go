@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -31,7 +32,13 @@ func TestCopySelfReplacesAtomically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi.Mode().Perm() != 0o755 {
+	// Windows has no POSIX permission bits: Chmod only toggles the
+	// read-only flag, so writable files read as 0666 there.
+	if runtime.GOOS == "windows" {
+		if fi.Mode().Perm()&0o200 == 0 {
+			t.Fatal("dest is read-only")
+		}
+	} else if fi.Mode().Perm() != 0o755 {
 		t.Fatalf("dest mode = %v, want 0755", fi.Mode().Perm())
 	}
 
