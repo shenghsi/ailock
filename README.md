@@ -2,6 +2,15 @@
 
 English | [简体中文](README.zh-CN.md)
 
+| | |
+| --- | --- |
+| Language | Go ≥ 1.24, stdlib + `golang.org/x/sys` only, no cgo |
+| Platforms | Linux, OpenWrt (arm/mips/mipsle), Windows, macOS |
+| Module | `github.com/shenghsi/ailock` |
+| License | MIT |
+| CI | Linux + Windows + macOS test matrix, 9-target cross-compile, release on `v*` tags |
+| Agent docs | [AGENTS.md](AGENTS.md) — ground rules for AI coding agents |
+
 A tiny always-on daemon that **sinkholes US AI provider domains whenever
 your proxy/VPN is not running**, and lifts the block the moment it is.
 Runs on Linux, Windows, macOS and OpenWrt (one Go binary per platform, no
@@ -257,6 +266,8 @@ Platform notes: per-OS code lives behind build tags (`internal/platform`,
 `internal/svcwin`); run `GOOS=windows go vet ./...` (and `GOOS=darwin`)
 before touching those, since a plain Linux build does not compile the
 tagged files. CI runs the test suite on Linux, Windows and macOS.
+AI coding agents should start from [AGENTS.md](AGENTS.md) (invariants,
+exact build/test commands, conventions).
 
 ## Contributing
 

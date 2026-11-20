@@ -1,0 +1,28 @@
+# ailock
+
+> Fail-closed hosts-file kill switch: sinkholes US AI provider domains
+> (OpenAI, Anthropic, Google, MS Copilot, xAI/Grok, Cursor) whenever the
+> local proxy/VPN is down; lifts the block when it recovers. One static
+> Go binary for Linux, OpenWrt, Windows, macOS.
+
+Facts: Go >= 1.24, module github.com/shenghsi/ailock, MIT, no cgo,
+sole dependency golang.org/x/sys. Bilingual CLI (English / 简体中文,
+auto-detected, "lang" config override).
+
+Key files:
+- README.md — full documentation (install, config, blocklist, quirks)
+- README.zh-CN.md — Chinese documentation (keep in sync with README.md)
+- AGENTS.md — ground rules and invariants for AI coding agents
+- CONTRIBUTING.md — human contributor guide (incl. blocklist rules)
+- blocklist — the domain data (embedded into the binary at build time)
+- internal/daemon — fail-closed toggle state machine
+- internal/hostsedit — marked-region hosts file rewriting
+- internal/check — tcp/http/exec health probes, any-of combinator
+- internal/selfupdate — GitHub-release self-update + SHA256SUMS verify
+- internal/platform — per-OS paths, DNS flush, dnsmasq emitter
+- internal/svcwin — Windows service host
+- .github/workflows/ci.yml — test matrix, cross-compile, release job
+
+Commands: `go test ./...`, `go vet ./...`, `gofmt -l .`, `bash build.sh`.
+Never weaken the fail-closed property; never touch hosts content outside
+the `# BEGIN/END ailock (managed)` markers.
