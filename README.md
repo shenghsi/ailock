@@ -183,6 +183,14 @@ silently disable the kill switch.
   `config.json`/`blocklist`, restart the service (commands listed under
   "Installing a downloaded release binary"). Manual `ailock block` /
   `unblock` / `status` always re-read both files.
+- **`dnsmasq_conf_dir` living on tmpfs is fine.** OpenWrt's default
+  conf-dir `/tmp/dnsmasq.d` is RAM and wiped at reboot — that matches how
+  OpenWrt builds dnsmasq config at every boot (generated config is
+  tmpfs; UCI in `/etc` is the persistent truth). ailock recreates its
+  address file on each boot as part of the fail-closed start, creates the
+  directory if dnsmasq has not yet, and self-heals the file if it goes
+  missing while blocked. Nothing there needs backing up; persistent
+  state lives in `/etc/ailock`.
 - **Everything looks blocked and won't lift?** Almost always the probe
   target: `ailock check` runs your configured probe once and prints the
   error. Until it passes, the block stays on — that is the fail-closed

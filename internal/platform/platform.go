@@ -16,11 +16,15 @@ const dnsmasqFileName = "ailock.conf"
 // SetDnsmasqBlocked writes address=/domain/ wildcard lines for every
 // domain into dir/ailock.conf (removing any previous file first), giving
 // dnsmasq true wildcard-subdomain coverage that hosts files cannot offer.
+//
+// The directory is created when missing: on OpenWrt the default conf-dir
+// /tmp/dnsmasq.d is tmpfs and may not exist yet when ailock (START=19)
+// comes up before dnsmasq.
 func SetDnsmasqBlocked(dir string, domains []string) error {
 	if dir == "" {
 		return nil
 	}
-	if err := checkDir(dir); err != nil {
+	if err := ensureDir(dir); err != nil {
 		return err
 	}
 	var b strings.Builder
@@ -53,8 +57,11 @@ func DnsmasqBlocked(dir string) bool {
 	return err == nil
 }
 
-func checkDir(dir string) error {
+func ensureDir(dir string) error {
 	fi, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return os.MkdirAll(dir, 0o755)
+	}
 	if err != nil {
 		return fmt.Errorf("dnsmasq conf dir %s unusable: %w", dir, err)
 	}

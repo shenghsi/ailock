@@ -173,6 +173,12 @@ API、静态 CDN）、`[ms-copilot]`（含 GitHub Copilot）、`[xai-grok]`、
 - **配置只在启动时读取一次**。修改 `config.json`/`blocklist` 后需重启服务
   （命令见"下载 release 二进制安装"一节）。手动 `ailock block` / `unblock`
   / `status` 总是重新读取。
+- **`dnsmasq_conf_dir` 放在 tmpfs 里没问题。** OpenWrt 默认的
+  `/tmp/dnsmasq.d` 在内存中、重启即清空——这正符合 OpenWrt 每次开机重建
+  dnsmasq 配置的方式（生成的配置本身就在 tmpfs；`/etc` 里的 UCI 才是持久
+  真相）。ailock 每次启动都会在故障关闭阶段重建该文件，目录不存在也会自行
+  创建，屏蔽期间文件丢失会自动补写。无需备份任何 /tmp 内容；持久状态都在
+  `/etc/ailock`。
 - **一直屏蔽、解除不了？** 几乎总是探测目标不对：`ailock check` 会执行一次
   你配置的探测并打印错误。探测通过之前保持屏蔽是故障关闭设计，不是 bug。
   `ailock unblock` 是逃生通道。

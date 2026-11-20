@@ -12,6 +12,7 @@ import (
 
 	"github.com/shenghsi/ailock/internal/check"
 	"github.com/shenghsi/ailock/internal/hostsedit"
+	"github.com/shenghsi/ailock/internal/platform"
 )
 
 type fakeProbe struct {
@@ -127,4 +128,47 @@ func TestUnblockRequiresStreak(t *testing.T) {
 		t.Fatal("block lifted despite flapping proxy")
 	}
 	cancel()
+}
+
+// The dnsmasq address file lives in tmpfs on OpenWrt (/tmp/dnsmasq.d) and
+// may be wiped while the block is on; the daemon must restore it.
+func TestDnsmasqFileHealedWhileBlocked(t *testing.T) {
+	probe := &fakeProbe{}
+	probe.setErr(errors.New("down"))
+	cfg := newTestConfig(t, probe)
+	cfg.DnsmasqConfDir = t.TempDir()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = Run(ctx, cfg) }()
+
+	file := filepath.Join(cfg.DnsmasqConfDir, "ailock.conf")
+	runUntil(t, ctx, cfg, func() bool { return platform.DnsmasqBlocked(cfg.DnsmasqConfDir) })
+
+	// Simulate a tmpfs wipe / late-created directory.
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	runUntil(t, ctx, cfg, func() bool { return platform.DnsmasqBlocked(cfg.DnsmasqConfDir) })
+
+	cancel()
+}
+
+// Even a not-yet-existing conf dir must work (boot race: ailock starts
+// before dnsmasq creates /tmp/dnsmasq.d).
+func TestDnsmasqDirCreatedWhenMissing(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "nested", "dnsmasq.d")
+	if err := platform.SetDnsmasqBlocked(dir, []string{"a.com"}); err != nil {
+		t.Fatalf("SetDnsmasqBlocked on missing dir: %v", err)
+	}
+	if !platform.DnsmasqBlocked(dir) {
+		t.Fatal("address file not written")
+	}
+	if err := platform.RemoveDnsmasqBlocked(dir); err != nil {
+		t.Fatal(err)
+	}
+	if platform.DnsmasqBlocked(dir) {
+		t.Fatal("address file not removed")
+	}
 }

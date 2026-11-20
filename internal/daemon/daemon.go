@@ -135,6 +135,18 @@ func Run(ctx context.Context, cfg Config) error {
 				} else {
 					cfg.logf(i18n.T("proxy down (%v) — blocked", "代理不可用（%v）——已屏蔽"), probeErr)
 				}
+			} else if cfg.DnsmasqConfDir != "" && !platform.DnsmasqBlocked(cfg.DnsmasqConfDir) {
+				// Heal: the conf-dir may have appeared only after our
+				// initial block (boot race — dnsmasq creates /tmp/dnsmasq.d
+				// late; it is tmpfs) or the file was removed. Rewrite it so
+				// the LAN stays covered.
+				if err := platform.SetDnsmasqBlocked(cfg.DnsmasqConfDir, cfg.Domains); err != nil {
+					cfg.logf("%s: %v", i18n.T("ERROR: dnsmasq block not restored",
+						"错误：dnsmasq 屏蔽恢复失败"), err)
+				} else {
+					platform.FlushDNS() // make dnsmasq re-read its conf-dir
+					cfg.logf("%s", i18n.T("dnsmasq block restored", "已恢复 dnsmasq 屏蔽"))
+				}
 			}
 		}
 
