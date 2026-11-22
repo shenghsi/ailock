@@ -147,6 +147,28 @@ func RestartService() error {
 	return s.Start()
 }
 
+// StopService stops the ailock service without removing it (no-op when
+// already stopped). The block state is left as-is (fail closed).
+func StopService() error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("connect service manager (need admin): %w", err)
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(serviceName)
+	if err != nil {
+		return fmt.Errorf("service %q not found (install first)", serviceName)
+	}
+	defer s.Close()
+	if st, err := s.Query(); err == nil && st.State != svc.Stopped {
+		if _, err := s.Control(1); err != nil { // SERVICE_CONTROL_STOP
+			return fmt.Errorf("stop service: %w", err)
+		}
+		waitStopped(s)
+	}
+	return nil
+}
+
 // Uninstall stops and removes the service.
 func Uninstall() error {
 	m, err := mgr.Connect()

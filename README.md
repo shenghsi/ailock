@@ -119,6 +119,10 @@ preserved; peek at the repo's `blocklist` file and delete
 `/etc/ailock/blocklist` to regenerate the new default.
 
 Uninstall: `ailock uninstall` (config and blocklist are kept).
+Stop the service: `ailock stop` (root/admin). Stopping never touches the
+hosts file — an active block stays on until `ailock unblock` (fail-closed).
+Start it again with the restart commands above (`start` in place of
+`restart`).
 Manual override for testing: `ailock block` / `ailock unblock` / `ailock status`.
 
 [releases]: https://github.com/shenghsi/ailock/releases
@@ -261,7 +265,7 @@ proxy is always restored, even on failure.
 
 Layout:
 
-    main.go                  CLI (run/install/uninstall/status/check/block/unblock)
+    main.go                  CLI (run/install/stop/uninstall/status/check/block/unblock)
     internal/daemon          fail-closed toggle state machine
     internal/check           tcp/http/exec probes, any-of combinator
     internal/hostsedit       marked-region hosts rewriting (atomic, CRLF-safe)

@@ -21,4 +21,6 @@ func Install(exePath, configPath string) error { return errNotWindows }
 
 func Uninstall() error { return errNotWindows }
 
+func StopService() error { return errNotWindows }
+
 func RestartService() error { return errNotWindows }

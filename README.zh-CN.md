@@ -97,6 +97,9 @@ Windows 上会先把旧 exe 改名为 `ailock.exe.old`），然后重启服务�
 `/etc/ailock/blocklist` 后重新生成。
 
 卸载：`ailock uninstall`（保留配置和屏蔽列表）。
+停止服务：`ailock stop`（需 root/管理员）。停止不会改动 hosts 文件——
+已生效的屏蔽会一直保留，直到执行 `ailock unblock`（故障关闭）。
+重新启动用上面的重启命令（把 restart 换成 start）。
 手动覆盖 / 测试：`ailock block` / `ailock unblock` / `ailock status`。
 
 ## 配置（`/etc/ailock/config.json`）

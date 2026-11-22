@@ -42,6 +42,7 @@ Usage:
 Commands:
   run        run the watcher in the foreground (what the service runs)
   install    write default config/blocklist and register the OS service
+  stop       stop the OS service (the current block state is left as-is)
   uninstall  stop and remove the OS service (config and blocklist are kept)
   status     show block state and one probe result
   check      run the health probe once and report
@@ -70,6 +71,7 @@ const usageZh = `ailock — 代理断开时黑洞（熔断）美国 AI 服务商
 命令：
   run        前台运行守护进程（系统服务执行的即是此命令）
   install    写入默认配置/屏蔽列表并注册系统服务
+  stop       停止系统服务（当前屏蔽状态保持不变）
   uninstall  停止并移除系统服务（保留配置与屏蔽列表）
   status     查看屏蔽状态，并执行一次健康探测
   check      执行一次健康探测并报告结果
@@ -114,6 +116,8 @@ func main() {
 		err = cmdRun(*cfgPath)
 	case "install":
 		err = cmdInstall(*cfgPath)
+	case "stop":
+		err = cmdStop(*cfgPath)
 	case "uninstall":
 		err = cmdUninstall()
 	case "status":
@@ -713,6 +717,50 @@ func cmdInstall(cfgPath string) error {
 			"未找到支持的 init 系统（systemd、procd/OpenWrt、launchd）"))
 	}
 	fmt.Println(i18n.T("check it: ailock status", "验证：ailock status"))
+	return nil
+}
+
+// stopInstalledService stops the service via the platform's service
+// manager. Stopping never touches the hosts file: a stopped daemon must
+// not lift the block (fail closed).
+func stopInstalledService() error {
+	switch {
+	case runtime.GOOS == "windows":
+		return svcwin.StopService()
+	case isOpenWrt():
+		return runCmd("/etc/init.d/ailock", "stop")
+	case hasSystemd():
+		return runCmd("systemctl", "stop", "ailock.service")
+	case runtime.GOOS == "darwin":
+		// bootout errors when the daemon is not loaded; treat that as
+		// "already stopped" so stop stays idempotent.
+		if err := runCmd("launchctl", "bootout", "system/com.ailock.daemon"); err != nil {
+			if err2 := runCmd("launchctl", "print", "system/com.ailock.daemon"); err2 != nil {
+				return nil
+			}
+			return err
+		}
+		return nil
+	default:
+		return errors.New(i18n.T("no supported init system found", "未找到支持的 init 系统"))
+	}
+}
+
+func cmdStop(cfgPath string) error {
+	if err := stopInstalledService(); err != nil {
+		return err
+	}
+	cfg, warn := loadConfig(cfgPath)
+	d := daemonConfig(check.Invalid{}, cfg, nil, log.New(os.Stderr, "", 0))
+	if d.BlockedNow() {
+		fmt.Println(i18n.T("service stopped — still BLOCKED (a stopped daemon never lifts the block; run 'ailock unblock' to remove the entries)",
+			"服务已停止——仍处于屏蔽状态（守护进程停止时绝不解除屏蔽；执行 ailock unblock 可移除条目）"))
+	} else {
+		fmt.Println(i18n.T("service stopped — not blocked", "服务已停止——未屏蔽"))
+	}
+	if warn != "" {
+		fmt.Println(i18n.T("warning: ", "警告："), warn)
+	}
 	return nil
 }
 
